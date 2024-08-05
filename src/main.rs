@@ -198,27 +198,28 @@ async fn main() -> Result<(), ()> {
         }
     }
 
+    // Prepare the git commit command but don't execute it, just provide it to the user
     let mut ps_commit = Command::new("git")
         .arg("commit")
         .args(if cli.review { vec!["-e"] } else { vec![] })
         .arg("-F")
         .arg("-")
         .stdin(Stdio::piped())
+        .stdout(Stdio::inherit())  // inherit stdout so it will appear on the terminal
         .spawn()
-        .unwrap();
+        .expect("Failed to start git commit process");
 
-    let mut stdin = ps_commit.stdin.take().expect("Failed to open stdin");
-    std::thread::spawn(move || {
+    {
+        let mut stdin = ps_commit.stdin.take().expect("Failed to open stdin");
         stdin
             .write_all(commit_msg.as_bytes())
             .expect("Failed to write to stdin");
-    });
+    }
 
-    let commit_output = ps_commit
-        .wait_with_output()
+    // Wait for the user to press enter to complete the commit
+    ps_commit
+        .wait()
         .expect("There was an error when creating the commit.");
-
-    info!("{}", str::from_utf8(&commit_output.stdout).unwrap());
 
     Ok(())
 }
