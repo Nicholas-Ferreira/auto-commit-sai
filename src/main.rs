@@ -1,15 +1,11 @@
-use async_openai::{
-    config::OpenAIConfig,
-    types::{
-        ChatCompletionFunctionCall, ChatCompletionFunctions, ChatCompletionRequestMessage,
-        CreateChatCompletionRequestArgs, FunctionCall, Role,
-    },
-};
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use log::{error, info};
+use sys_locale::get_locale;
 use question::{Answer, Question};
 use rand::seq::SliceRandom;
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::Client;
 use schemars::{
     gen::{SchemaGenerator, SchemaSettings},
     JsonSchema,
@@ -25,7 +21,7 @@ use std::{
 #[derive(Parser)]
 #[command(version)]
 #[command(name = "Auto Commit")]
-#[command(author = "Miguel Piedrafita <soy@miguelpiedrafita.com>")]
+#[command(author = "Nicholas Ferreira fork Miguel Piedrafita")]
 #[command(about = "Automagically generate commit messages.", long_about = None)]
 struct Cli {
     #[clap(flatten)]
@@ -70,8 +66,8 @@ async fn main() -> Result<(), ()> {
         .filter_level(cli.verbose.log_level_filter())
         .init();
 
-    let api_token = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
-        error!("Please set the OPENAI_API_KEY environment variable.");
+    let api_token = std::env::var("SAI_API_KEY").unwrap_or_else(|_| {
+        error!("Please set the SAI_API_KEY environment variable.");
         std::process::exit(1);
     });
 
@@ -86,6 +82,7 @@ async fn main() -> Result<(), ()> {
 
     if git_staged_cmd.is_empty() {
         error!("There are no staged files to commit.\nTry running `git add` to stage some files.");
+        std::process::exit(1);
     }
 
     let is_repo = Command::new("git")
@@ -100,7 +97,7 @@ async fn main() -> Result<(), ()> {
         std::process::exit(1);
     }
 
-    let client = async_openai::Client::with_config(OpenAIConfig::new().with_api_key(api_token));
+    let client = Client::new();
 
     let output = Command::new("git")
         .arg("diff")
@@ -149,80 +146,32 @@ async fn main() -> Result<(), ()> {
         None
     };
 
-    let mut generator = SchemaGenerator::new(SchemaSettings::openapi3().with(|settings| {
-        settings.inline_subschemas = true;
-    }));
+    let mut headers = HeaderMap::new();
+    headers.insert("X-Api-Key", HeaderValue::from_str(&api_token).unwrap());
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-    let commit_schema = generator.subschema_for::<Commit>().into_object();
+    let language = get_locale().unwrap_or_else(|| "pt-BR".to_string());
 
-    let completion = client
-        .chat()
-        .create(
-            CreateChatCompletionRequestArgs::default()
-                .messages(vec![
-                    ChatCompletionRequestMessage {
-                        role: Role::System,
-                        content: Some(
-                            "You are an experienced programmer who writes great commit messages."
-                                .to_string(),
-                        ),
-                        ..Default::default()
-                    },
-                    ChatCompletionRequestMessage {
-                        role: Role::Assistant,
-                        content: Some("".to_string()),
-                        function_call: Some(FunctionCall {
-                            arguments: "{}".to_string(),
-                            name: "get_diff".to_string(),
-                        }),
-                        ..Default::default()
-                    },
-                    ChatCompletionRequestMessage {
-                        role: Role::Function,
-                        content: Some(output.to_string()),
-                        name: Some("get_diff".to_string()),
-                        ..Default::default()
-                    },
-                ])
-                .functions(vec![
-                    ChatCompletionFunctions {
-                        name: "get_diff".to_string(),
-                        description: Some(
-                            "Returns the output of `git diff HEAD` as a string.".to_string(),
-                        ),
-                        parameters: Some(json!({
-                            "type": "object",
-                            "properties": {}
-                        })),
-                    },
-                    ChatCompletionFunctions {
-                        name: "commit".to_string(),
-                        description: Some(
-                            "Creates a commit with the given title and a description.".to_string(),
-                        ),
-                        parameters: Some(serde_json::to_value(commit_schema).unwrap()),
-                    },
-                ])
-                .function_call(ChatCompletionFunctionCall::Object(
-                    json!({ "name": "commit" }),
-                ))
-                .model("gpt-3.5-turbo-16k")
-                .temperature(0.0)
-                .max_tokens(2000u16)
-                .build()
-                .unwrap(),
-        )
+    let body = json!({
+        "inputs": {
+            "diff": output,
+            "language": language,
+        }
+    });
+
+    let response = client
+        .post("https://sai-library.saiapplications.com/api/templates/66b12119075c349831386040/execute")
+        .headers(headers)
+        .json(&body)
+        .send()
         .await
-        .expect("Couldn't complete prompt.");
+        .expect("Request failed");
 
+    let commit_msg = response.text().await.expect("Couldn't parse response");
+    
     if sp.is_some() {
         sp.unwrap().stop_with_message("Finished Analyzing!".into());
     }
-
-    let commit_data = &completion.choices[0].message.function_call;
-    let commit_msg = serde_json::from_str::<Commit>(&commit_data.as_ref().unwrap().arguments)
-        .expect("Couldn't parse model response.")
-        .to_string();
 
     if cli.dry_run {
         info!("{}", commit_msg);
