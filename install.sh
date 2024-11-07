@@ -58,7 +58,7 @@ main() {
         ARCHITECTURE="x86_64" # Amd.
         fi
 
-    BINARY_URL="https://github.com/m1guelpf/auto-commit/releases/latest/download/auto-commit-${PLATFORM}-${ARCHITECTURE}"
+    BINARY_URL="https://github.com/Nicholas-Ferreira/auto-commit/releases/latest/download/auto-commit-${PLATFORM}-${ARCHITECTURE}"
     echo $BINARY_URL
 
     echo "downloading latest binary"
