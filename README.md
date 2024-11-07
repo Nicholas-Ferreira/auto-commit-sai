@@ -9,7 +9,7 @@ A CLI tool that generates commit messages from your staged changes, built in Rus
 You can install `auto-commit` by running the following command in your terminal.
 
 ```
-curl -fsSL https://raw.githubusercontent.com/m1guelpf/auto-commit/main/install.sh | sh -
+curl -fsSL https://raw.githubusercontent.com/Nicholas-Ferreira/auto-commit/main/install.sh | sh -
 ```
 
 Or, if you're an arch user, you can download it from the [AUR](https://aur.archlinux.org/) using
@@ -18,7 +18,7 @@ Or, if you're an arch user, you can download it from the [AUR](https://aur.archl
 yay -S auto-commit
 ```
 
-You may need to close and reopen your terminal after installation. Alternatively, you can download the binary corresponding to your OS from the [latest release](https://github.com/m1guelpf/auto-commit/releases/latest).
+You may need to close and reopen your terminal after installation. Alternatively, you can download the binary corresponding to your OS from the [latest release](https://github.com/Nicholas-Ferreira/auto-commit/releases/latest).
 
 ## Usage
 
